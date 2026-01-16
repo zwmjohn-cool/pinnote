@@ -52,8 +52,14 @@ class NoteViewModel: ObservableObject {
         note.spaceID = spaceID
         // 始终更新桌面名称（除非用户自定义了名称）
         let defaultName = SpaceManager.shared.getDefaultSpaceName(for: spaceID)
-        // 如果当前名称是默认格式（"桌面"或"桌面 X"），则自动更新
-        if note.spaceName == "桌面" || note.spaceName.hasPrefix("桌面 ") {
+        // 如果当前名称是默认格式，则自动更新
+        // 匹配格式："桌面"、"桌面 X"、"主屏 桌面 X"、"副屏Y 桌面 X"、"全屏应用"
+        let isDefaultFormat = note.spaceName == "桌面" ||
+                              note.spaceName == "全屏应用" ||
+                              note.spaceName.hasPrefix("桌面 ") ||
+                              note.spaceName.hasPrefix("主屏 桌面") ||
+                              note.spaceName.hasPrefix("副屏")
+        if isDefaultFormat {
             note.spaceName = defaultName
         }
         noteStore.save(note)

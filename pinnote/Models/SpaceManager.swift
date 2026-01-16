@@ -1,6 +1,32 @@
 import Foundation
 import AppKit
 
+// MARK: - 显示器信息
+struct DisplayInfo {
+    let identifier: String      // 显示器标识符
+    let isMain: Bool           // 是否主屏
+    let displayIndex: Int      // 显示器索引（主屏=0，副屏从1开始）
+
+    var displayName: String {
+        if isMain {
+            return "主屏"
+        } else {
+            return "副屏\(displayIndex)"
+        }
+    }
+}
+
+// MARK: - 桌面空间信息
+struct SpaceInfo {
+    let spaceID: Int
+    let display: DisplayInfo
+    let spaceIndex: Int        // 在该显示器上的桌面索引（从1开始）
+
+    var fullName: String {
+        return "\(display.displayName) 桌面 \(spaceIndex)"
+    }
+}
+
 /// 桌面空间管理器 - 使用私有 API 获取当前桌面空间 ID
 class SpaceManager: ObservableObject {
     static let shared = SpaceManager()
@@ -37,7 +63,11 @@ class SpaceManager: ObservableObject {
     @objc private func spaceDidChange(_ notification: Notification) {
         DispatchQueue.main.async {
             self.updateCurrentSpace()
-            print("[SpaceManager] 桌面切换 -> Space ID: \(self.currentSpaceID), Index: \(self.currentSpaceIndex)")
+            if let info = self.getSpaceInfo(for: self.currentSpaceID) {
+                print("[SpaceManager] 桌面切换 -> \(info.fullName) (ID: \(self.currentSpaceID))")
+            } else {
+                print("[SpaceManager] 桌面切换 -> Space ID: \(self.currentSpaceID)")
+            }
         }
     }
 
@@ -54,83 +84,67 @@ class SpaceManager: ObservableObject {
         return Self.CGSGetActiveSpace(connection)
     }
 
-    /// 调试：打印所有空间信息
-    func debugPrintSpaces() {
-        let connection = Self.CGSDefaultConnectionForThread()
-        let currentID = Self.CGSGetActiveSpace(connection)
-        print("[SpaceManager] ========== 桌面空间调试 ==========")
-        print("[SpaceManager] 当前活动 Space ID: \(currentID)")
+    // MARK: - 获取显示器信息
 
-        guard let displays = Self.CGSCopyManagedDisplaySpaces(connection) as? [[String: Any]] else {
-            print("[SpaceManager] 错误: 无法获取桌面空间列表")
-            return
-        }
-
-        var userSpaceIndex = 1
-        for (displayIndex, display) in displays.enumerated() {
-            print("[SpaceManager] Display \(displayIndex):")
-            if let spaces = display["Spaces"] as? [[String: Any]] {
-                for space in spaces {
-                    // 尝试多种可能的 ID 键
-                    let id64 = space["id64"] as? Int
-                    let managedSpaceID = space["ManagedSpaceID"] as? Int
-                    let type = space["type"] as? Int ?? -1
-                    let uuid = (space["uuid"] as? String ?? "unknown").prefix(8)
-
-                    let spaceIDValue = id64 ?? managedSpaceID ?? 0
-                    let isCurrentSpace = spaceIDValue == currentID
-                    let typeStr = type == 0 ? "用户桌面" : (type == 4 ? "全屏应用" : "type=\(type)")
-
-                    if type == 0 {
-                        print("  桌面 \(userSpaceIndex): id=\(spaceIDValue), \(typeStr), uuid=\(uuid)...\(isCurrentSpace ? " <-- 当前" : "")")
-                        userSpaceIndex += 1
-                    } else {
-                        print("  [跳过]: id=\(spaceIDValue), \(typeStr), uuid=\(uuid)...")
-                    }
-                }
-            }
-        }
-        print("[SpaceManager] ====================================")
-    }
-
-    /// 获取所有用户桌面空间（排除全屏应用）
-    func getAllSpaces() -> [[String: Any]]? {
+    /// 解析所有显示器及其桌面空间
+    private func parseDisplaysAndSpaces() -> [(display: DisplayInfo, spaces: [[String: Any]])]? {
         let connection = Self.CGSDefaultConnectionForThread()
         guard let displays = Self.CGSCopyManagedDisplaySpaces(connection) as? [[String: Any]] else {
             return nil
         }
 
-        var allSpaces: [[String: Any]] = []
-        for display in displays {
+        var result: [(display: DisplayInfo, spaces: [[String: Any]])] = []
+        var secondaryIndex = 1  // 副屏编号从1开始
+
+        for (index, display) in displays.enumerated() {
+            let identifier = display["Display Identifier"] as? String ?? "unknown-\(index)"
+
+            // 判断是否主屏：第一个显示器通常是主屏，或者标识符包含 "Main"
+            let isMain = index == 0 || identifier.lowercased().contains("main")
+
+            let displayInfo = DisplayInfo(
+                identifier: identifier,
+                isMain: isMain,
+                displayIndex: isMain ? 0 : secondaryIndex
+            )
+
+            if !isMain {
+                secondaryIndex += 1
+            }
+
+            // 获取该显示器的桌面空间（只包含用户桌面，排除全屏应用）
             if let spaces = display["Spaces"] as? [[String: Any]] {
-                // 只包含用户桌面空间 (type == 0)，排除全屏应用空间 (type == 4)
                 let userSpaces = spaces.filter { ($0["type"] as? Int) == 0 }
-                allSpaces.append(contentsOf: userSpaces)
+                result.append((display: displayInfo, spaces: userSpaces))
             }
         }
-        return allSpaces
+
+        return result
     }
 
-    /// 根据 Space ID 获取空间索引（从1开始）
-    func getSpaceIndex(for spaceID: Int) -> Int {
-        guard let spaces = getAllSpaces() else { return 1 }
+    /// 获取指定 spaceID 的详细信息
+    func getSpaceInfo(for spaceID: Int) -> SpaceInfo? {
+        guard let displaysAndSpaces = parseDisplaysAndSpaces() else {
+            return nil
+        }
 
-        for (index, space) in spaces.enumerated() {
-            // 尝试 id64 键
-            if let id = space["id64"] as? Int, id == spaceID {
-                return index + 1
-            }
-            // 尝试 ManagedSpaceID 键
-            if let id = space["ManagedSpaceID"] as? Int, id == spaceID {
-                return index + 1
+        for (displayInfo, spaces) in displaysAndSpaces {
+            for (index, space) in spaces.enumerated() {
+                let id = space["id64"] as? Int ?? space["ManagedSpaceID"] as? Int ?? 0
+                if id == spaceID {
+                    return SpaceInfo(
+                        spaceID: spaceID,
+                        display: displayInfo,
+                        spaceIndex: index + 1
+                    )
+                }
             }
         }
 
-        // 如果在用户桌面中找不到，可能是全屏应用空间
-        // 检查是否是全屏应用
+        // 检查是否是全屏应用空间
         let connection = Self.CGSDefaultConnectionForThread()
         guard let displays = Self.CGSCopyManagedDisplaySpaces(connection) as? [[String: Any]] else {
-            return 1
+            return nil
         }
 
         for display in displays {
@@ -139,12 +153,58 @@ class SpaceManager: ObservableObject {
                     let id = space["id64"] as? Int ?? space["ManagedSpaceID"] as? Int ?? 0
                     let type = space["type"] as? Int ?? 0
                     if id == spaceID && type != 0 {
-                        return 0  // 全屏应用空间返回 0
+                        // 全屏应用空间
+                        return nil
                     }
                 }
             }
         }
 
+        return nil
+    }
+
+    /// 调试：打印所有空间信息
+    func debugPrintSpaces() {
+        let connection = Self.CGSDefaultConnectionForThread()
+        let currentID = Self.CGSGetActiveSpace(connection)
+        print("[SpaceManager] ========== 桌面空间调试 ==========")
+        print("[SpaceManager] 当前活动 Space ID: \(currentID)")
+
+        guard let displaysAndSpaces = parseDisplaysAndSpaces() else {
+            print("[SpaceManager] 错误: 无法获取桌面空间列表")
+            return
+        }
+
+        for (displayInfo, spaces) in displaysAndSpaces {
+            print("[SpaceManager] \(displayInfo.displayName) (identifier: \(displayInfo.identifier.prefix(20))...):")
+            for (index, space) in spaces.enumerated() {
+                let id = space["id64"] as? Int ?? space["ManagedSpaceID"] as? Int ?? 0
+                let uuid = (space["uuid"] as? String ?? "unknown").prefix(8)
+                let isCurrentSpace = id == currentID
+                print("  桌面 \(index + 1): id=\(id), uuid=\(uuid)...\(isCurrentSpace ? " <-- 当前" : "")")
+            }
+        }
+        print("[SpaceManager] ====================================")
+    }
+
+    /// 获取所有用户桌面空间（排除全屏应用）
+    func getAllSpaces() -> [[String: Any]]? {
+        guard let displaysAndSpaces = parseDisplaysAndSpaces() else {
+            return nil
+        }
+
+        var allSpaces: [[String: Any]] = []
+        for (_, spaces) in displaysAndSpaces {
+            allSpaces.append(contentsOf: spaces)
+        }
+        return allSpaces
+    }
+
+    /// 根据 Space ID 获取空间索引（全局索引，从1开始）
+    func getSpaceIndex(for spaceID: Int) -> Int {
+        if let info = getSpaceInfo(for: spaceID) {
+            return info.spaceIndex
+        }
         return 1
     }
 
@@ -152,12 +212,31 @@ class SpaceManager: ObservableObject {
         return getAllSpaces()?.count ?? 1
     }
 
+    /// 生成默认的空间名称，格式：主屏 桌面 1 / 副屏1 桌面 2
     func getDefaultSpaceName(for spaceID: Int) -> String {
-        let index = getSpaceIndex(for: spaceID)
-        if index == 0 {
-            return "全屏应用"
+        if let info = getSpaceInfo(for: spaceID) {
+            return info.fullName
         }
-        return "桌面 \(index)"
+
+        // 检查是否是全屏应用
+        let connection = Self.CGSDefaultConnectionForThread()
+        guard let displays = Self.CGSCopyManagedDisplaySpaces(connection) as? [[String: Any]] else {
+            return "桌面"
+        }
+
+        for display in displays {
+            if let spaces = display["Spaces"] as? [[String: Any]] {
+                for space in spaces {
+                    let id = space["id64"] as? Int ?? space["ManagedSpaceID"] as? Int ?? 0
+                    let type = space["type"] as? Int ?? 0
+                    if id == spaceID && type != 0 {
+                        return "全屏应用"
+                    }
+                }
+            }
+        }
+
+        return "桌面"
     }
 
     deinit {

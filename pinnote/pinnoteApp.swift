@@ -14,28 +14,39 @@ extension Notification.Name {
     static let openNoteWindow = Notification.Name("openNoteWindow")
 }
 
+// MARK: - 全局窗口管理器
+class WindowManager: ObservableObject {
+    static let shared = WindowManager()
+    var openWindowAction: ((UUID) -> Void)?
+}
+
 @main
 struct pinnoteApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var noteStore = NoteStore.shared
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
+        // 菜单栏
+        MenuBarExtra("PinNote", systemImage: "note.text") {
+            MenuBarView(noteStore: noteStore)
+        }
+        .menuBarExtraStyle(.window)
+
         // 便利贴窗口组
         WindowGroup(id: "note", for: UUID.self) { $noteID in
             NoteWindowContainer(noteID: noteID, noteStore: noteStore)
+                .onAppear {
+                    // 注册 openWindow 动作
+                    WindowManager.shared.openWindowAction = { id in
+                        openWindow(id: "note", value: id)
+                    }
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .defaultSize(width: 300, height: 300)
         .defaultPosition(.center)
-        .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("新建便利贴") {
-                    NotificationCenter.default.post(name: .createNewNote, object: nil)
-                }
-                .keyboardShortcut("n", modifiers: .command)
-            }
-        }
 
         // 设置窗口
         Settings {
@@ -44,11 +55,160 @@ struct pinnoteApp: App {
     }
 }
 
+// MARK: - 菜单栏视图
+struct MenuBarView: View {
+    @ObservedObject var noteStore: NoteStore
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // 标题栏
+            HStack {
+                Text("便利贴")
+                    .font(.headline)
+                Spacer()
+                Button(action: createNewNote) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 18))
+                }
+                .buttonStyle(.plain)
+                .help("新建便利贴")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(nsColor: .windowBackgroundColor))
+
+            Divider()
+
+            // 便利贴列表
+            if noteStore.notes.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "note.text")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.secondary)
+                    Text("暂无便利贴")
+                        .foregroundStyle(.secondary)
+                    Button("创建第一个便利贴") {
+                        createNewNote()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(noteStore.notes) { note in
+                            NoteListItem(note: note) {
+                                openWindow(id: "note", value: note.id)
+                            } onDelete: {
+                                noteStore.delete(note)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            Divider()
+
+            // 底部按钮
+            HStack {
+                Button("退出") {
+                    NSApplication.shared.terminate(nil)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Text("\(noteStore.notes.count) 个便利贴")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(nsColor: .windowBackgroundColor))
+        }
+        .frame(width: 280, height: 350)
+    }
+
+    private func createNewNote() {
+        let newNote = noteStore.createNote()
+        openWindow(id: "note", value: newNote.id)
+    }
+}
+
+// MARK: - 便利贴列表项
+struct NoteListItem: View {
+    let note: Note
+    let onOpen: () -> Void
+    let onDelete: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // 颜色指示
+            RoundedRectangle(cornerRadius: 4)
+                .fill(note.color)
+                .frame(width: 6, height: 40)
+
+            // 内容预览
+            VStack(alignment: .leading, spacing: 2) {
+                Text(note.spaceName)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.primary)
+
+                Text(notePreview)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            // 操作按钮
+            if isHovering {
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.red)
+                }
+                .buttonStyle(.plain)
+                .help("删除")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(isHovering ? Color.primary.opacity(0.05) : Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onOpen()
+        }
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+
+    private var notePreview: String {
+        if note.content.isEmpty {
+            return "空白便利贴"
+        }
+        if let attrString = NSAttributedString(rtf: note.content, documentAttributes: nil) {
+            let text = attrString.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? "空白便利贴" : text
+        }
+        return "空白便利贴"
+    }
+}
+
 // MARK: - 窗口容器视图
 struct NoteWindowContainer: View {
     let noteID: UUID?
     @ObservedObject var noteStore: NoteStore
     @State private var viewModel: NoteViewModel?
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Group {
@@ -61,6 +221,10 @@ struct NoteWindowContainer: View {
                         setupViewModel()
                     }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .createNewNote)) { _ in
+            let newNote = noteStore.createNote()
+            openWindow(id: "note", value: newNote.id)
         }
     }
 
@@ -96,22 +260,7 @@ struct SettingsView: View {
 
 // MARK: - App Delegate
 class AppDelegate: NSObject, NSApplicationDelegate {
-    private var openWindowAction: ((UUID) -> Void)?
-
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 首次启动检查
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.restoreNotesIfNeeded()
-        }
-
-        // 监听创建新便利贴的通知
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleCreateNewNote),
-            name: .createNewNote,
-            object: nil
-        )
-
         // 监听关闭窗口通知
         NotificationCenter.default.addObserver(
             self,
@@ -121,26 +270,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func restoreNotesIfNeeded() {
-        let store = NoteStore.shared
-        if store.notes.isEmpty {
-            // 首次启动，创建一个默认便利贴
-            _ = store.createNote()
-        }
-    }
-
-    @objc private func handleCreateNewNote(_ notification: Notification) {
-        // 通过菜单栏触发新窗口 - SwiftUI 会自动处理
-    }
-
     @objc private func handleCloseNote(_ notification: Notification) {
-        guard let noteID = notification.object as? UUID else { return }
-        // 关闭对应的窗口
-        for window in NSApplication.shared.windows {
-            if window.title.contains(noteID.uuidString) {
-                window.close()
-                break
-            }
+        // 关闭当前 key window
+        if let keyWindow = NSApplication.shared.keyWindow {
+            keyWindow.close()
         }
     }
 }
