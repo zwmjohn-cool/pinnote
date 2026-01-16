@@ -58,16 +58,10 @@ struct NoteWindow: View {
             }
         }
         .onAppear {
-            // 更新当前桌面空间
-            let currentSpaceID = spaceManager.getCurrentSpaceID()
+            // 只在首次创建时设置桌面空间（spaceID == 0 表示新建的便利贴）
             if viewModel.note.spaceID == 0 {
+                let currentSpaceID = spaceManager.getCurrentSpaceID()
                 viewModel.updateSpaceID(currentSpaceID)
-            }
-        }
-        .onReceive(spaceManager.$currentSpaceID) { newSpaceID in
-            // 当切换桌面时，更新便利贴的桌面空间信息
-            if newSpaceID != 0 && newSpaceID != viewModel.note.spaceID {
-                viewModel.updateSpaceID(newSpaceID)
             }
         }
     }
