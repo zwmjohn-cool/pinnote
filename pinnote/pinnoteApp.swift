@@ -136,6 +136,10 @@ struct MenuBarView: View {
     private func createNewNote() {
         let newNote = noteStore.createNote()
         openWindow(id: "note", value: newNote.id)
+        // 延迟激活窗口，确保窗口已创建
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
     }
 }
 
