@@ -181,6 +181,7 @@ struct NoteListItem: View {
                 }
                 .buttonStyle(.plain)
                 .help("删除")
+                .padding(.trailing, 8)
             }
         }
         .padding(.horizontal, 12)
