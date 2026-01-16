@@ -14,6 +14,7 @@ struct Note: Identifiable, Codable {
     var windowHeight: Double
     var createdAt: Date
     var updatedAt: Date
+    var isPinned: Bool  // 是否置于最后
 
     init(
         id: UUID = UUID(),
@@ -24,7 +25,8 @@ struct Note: Identifiable, Codable {
         windowX: Double = 100,
         windowY: Double = 100,
         windowWidth: Double = 300,
-        windowHeight: Double = 300
+        windowHeight: Double = 300,
+        isPinned: Bool = false
     ) {
         self.id = id
         self.content = content
@@ -37,6 +39,7 @@ struct Note: Identifiable, Codable {
         self.windowHeight = windowHeight
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.isPinned = isPinned
     }
 
     var windowFrame: CGRect {

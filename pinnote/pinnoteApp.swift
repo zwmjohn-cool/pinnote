@@ -12,6 +12,7 @@ extension Notification.Name {
     static let createNewNote = Notification.Name("createNewNote")
     static let closeNoteWindow = Notification.Name("closeNoteWindow")
     static let openNoteWindow = Notification.Name("openNoteWindow")
+    static let updateWindowLevel = Notification.Name("updateWindowLevel")
 }
 
 // MARK: - 全局窗口管理器
@@ -103,6 +104,8 @@ struct MenuBarView: View {
                                 openWindow(id: "note", value: note.id)
                             } onDelete: {
                                 noteStore.delete(note)
+                            } onTogglePin: {
+                                noteStore.togglePin(note)
                             }
                         }
                     }
@@ -148,6 +151,7 @@ struct NoteListItem: View {
     let note: Note
     let onOpen: () -> Void
     let onDelete: () -> Void
+    let onTogglePin: () -> Void
 
     @State private var isHovering = false
 
@@ -160,9 +164,16 @@ struct NoteListItem: View {
 
             // 内容预览
             VStack(alignment: .leading, spacing: 2) {
-                Text(note.spaceName)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.primary)
+                HStack(spacing: 4) {
+                    Text(note.spaceName)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.primary)
+                    if note.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.orange)
+                    }
+                }
 
                 Text(notePreview)
                     .font(.system(size: 11))
@@ -174,6 +185,15 @@ struct NoteListItem: View {
 
             // 操作按钮
             if isHovering {
+                // Pin/Unpin 按钮
+                Button(action: onTogglePin) {
+                    Image(systemName: note.isPinned ? "pin.slash.fill" : "pin.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(note.isPinned ? .orange : .gray)
+                }
+                .buttonStyle(.plain)
+                .help(note.isPinned ? "取消置后" : "置于最后")
+
                 Button(action: onDelete) {
                     Image(systemName: "trash")
                         .font(.system(size: 12))

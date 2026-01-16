@@ -62,6 +62,19 @@ class NoteStore: ObservableObject {
         persistNotes()
     }
 
+    func togglePin(_ note: Note) {
+        if let index = notes.firstIndex(where: { $0.id == note.id }) {
+            notes[index].isPinned.toggle()
+            persistNotes()
+            // 发送通知更新窗口层级
+            NotificationCenter.default.post(
+                name: .updateWindowLevel,
+                object: note.id,
+                userInfo: ["isPinned": notes[index].isPinned]
+            )
+        }
+    }
+
     private func persistNotes() {
         do {
             let data = try JSONEncoder().encode(notes)

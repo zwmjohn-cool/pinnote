@@ -71,6 +71,18 @@ class NoteViewModel: ObservableObject {
         noteStore.save(note)
     }
 
+    func togglePinned() {
+        note.isPinned.toggle()
+        note.updatedAt = Date()
+        noteStore.save(note)
+        // 发送通知更新窗口层级
+        NotificationCenter.default.post(
+            name: .updateWindowLevel,
+            object: note.id,
+            userInfo: ["isPinned": note.isPinned]
+        )
+    }
+
     func closeWindow() {
         saveContent()
         // 发送关闭通知
