@@ -91,6 +91,7 @@ struct NoteWindow: View {
                 textColor: viewModel.note.nsTextColor
             )
             .frame(minWidth: 200, minHeight: 150)
+            .allowsHitTesting(!viewModel.note.isPinned)
         }
         .background(viewModel.note.color)
         .clipShape(RoundedRectangle(cornerRadius: 12))
