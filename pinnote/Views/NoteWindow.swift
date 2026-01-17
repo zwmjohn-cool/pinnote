@@ -51,6 +51,10 @@ struct NoteWindow: View {
     @State private var isHovering = false
     @State private var currentWindow: NSWindow?
 
+    private var pinnedWindowLevel: NSWindow.Level {
+        NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.normalWindow)) - 1)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // 顶部标题栏 - 显示桌面空间信息
@@ -146,8 +150,8 @@ struct NoteWindow: View {
         }
 
         if isPinned {
-            // 置于所有窗口最后（桌面级别），在 Mission Control 中可见
-            window.level = .init(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
+            // 置于所有窗口最后（桌面之上、普通窗口之下），仍保留可交互的标题栏/边缘
+            window.level = pinnedWindowLevel
             window.collectionBehavior = [.managed]
             window.orderBack(nil)
             print("[NoteWindow] 窗口已置后: \(viewModel.note.id)")
@@ -173,7 +177,8 @@ struct NoteWindow: View {
         // 如果是 pin 状态，延迟恢复桌面层级
         if viewModel.note.isPinned {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                window.level = .init(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
+                window.level = pinnedWindowLevel
+                window.orderBack(nil)
             }
         }
     }
