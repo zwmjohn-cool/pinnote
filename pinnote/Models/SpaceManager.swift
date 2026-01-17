@@ -44,6 +44,9 @@ class SpaceManager: ObservableObject {
     @_silgen_name("CGSCopyManagedDisplaySpaces")
     private static func CGSCopyManagedDisplaySpaces(_ connection: Int32) -> CFArray?
 
+    @_silgen_name("CGSCopySpacesForWindows")
+    private static func CGSCopySpacesForWindows(_ connection: Int32, _ mask: Int32, _ windowIDs: CFArray) -> CFArray?
+
     private init() {
         updateCurrentSpace()
         setupNotifications()
@@ -210,6 +213,18 @@ class SpaceManager: ObservableObject {
 
     func getSpaceCount() -> Int {
         return getAllSpaces()?.count ?? 1
+    }
+
+    /// 获取指定窗口所在的 Space ID
+    func getSpaceID(for windowNumber: Int) -> Int? {
+        let connection = Self.CGSDefaultConnectionForThread()
+        let windowIDs = [windowNumber] as CFArray
+        // mask = 0x7 表示获取所有类型的空间（用户桌面、全屏应用等）
+        guard let spaces = Self.CGSCopySpacesForWindows(connection, 0x7, windowIDs) as? [Int],
+              let spaceID = spaces.first else {
+            return nil
+        }
+        return spaceID
     }
 
     /// 生成默认的空间名称，格式：主屏 桌面 1 / 副屏1 桌面 2

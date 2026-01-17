@@ -140,6 +140,60 @@ struct NoteWindow: View {
                 applyWindowLevel(isPinned: isPinned)
             }
         }
+        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.activeSpaceDidChangeNotification)) { _ in
+            // 桌面切换时检查窗口是否在新桌面上，延迟等待系统更新
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                checkAndUpdateWindowSpace()
+            }
+            // 再次延迟检查，确保捕获到变化
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                checkAndUpdateWindowSpace()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeScreenNotification)) { notification in
+            // 窗口移动到其他屏幕时检查
+            if let window = notification.object as? NSWindow,
+               window == currentWindow {
+                checkAndUpdateWindowSpace()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didMoveNotification)) { notification in
+            // 窗口拖动结束时检查是否移动到其他桌面
+            if let window = notification.object as? NSWindow,
+               window == currentWindow {
+                // 延迟检查，等待系统更新窗口所在空间
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    checkAndUpdateWindowSpace()
+                }
+            }
+        }
+    }
+
+    /// 检查窗口所在桌面并更新显示
+    private func checkAndUpdateWindowSpace() {
+        guard let window = currentWindow ?? NoteWindowTracker.shared.window(for: viewModel.note.id) else {
+            print("[NoteWindow] checkAndUpdateWindowSpace: 无法获取窗口")
+            return
+        }
+
+        let windowNumber = window.windowNumber
+        print("[NoteWindow] 检查窗口 \(windowNumber), 当前记录 spaceID: \(viewModel.note.spaceID)")
+
+        if let newSpaceID = spaceManager.getSpaceID(for: windowNumber) {
+            print("[NoteWindow] 窗口实际所在 spaceID: \(newSpaceID)")
+            if newSpaceID != viewModel.note.spaceID {
+                viewModel.updateSpaceID(newSpaceID)
+                print("[NoteWindow] 窗口 \(viewModel.note.id) 移动到新桌面: \(spaceManager.getDefaultSpaceName(for: newSpaceID))")
+            }
+        } else {
+            // 如果无法获取窗口所在空间，使用当前活动空间
+            let currentSpaceID = spaceManager.getCurrentSpaceID()
+            print("[NoteWindow] 无法获取窗口空间，使用当前活动空间: \(currentSpaceID)")
+            if currentSpaceID != viewModel.note.spaceID {
+                viewModel.updateSpaceID(currentSpaceID)
+                print("[NoteWindow] 窗口 \(viewModel.note.id) 更新到当前桌面: \(spaceManager.getDefaultSpaceName(for: currentSpaceID))")
+            }
+        }
     }
 
     private func applyWindowLevel(isPinned: Bool) {
