@@ -142,9 +142,9 @@ struct NoteWindow: View {
         }
 
         if isPinned {
-            // 置于所有窗口最后（桌面级别），但只在当前桌面显示
+            // 置于所有窗口最后（桌面级别），在 Mission Control 中可见
             window.level = .init(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
-            window.collectionBehavior = [.stationary]
+            window.collectionBehavior = [.managed]
             window.orderBack(nil)
             print("[NoteWindow] 窗口已置后: \(viewModel.note.id)")
         } else {
