@@ -65,6 +65,9 @@ struct NoteWindow: View {
                 },
                 onTogglePin: {
                     viewModel.togglePinned()
+                },
+                onActivate: {
+                    activateWindow()
                 }
             )
 
@@ -157,6 +160,23 @@ struct NoteWindow: View {
             print("[NoteWindow] 窗口已置前: \(viewModel.note.id)")
         }
     }
+
+    private func activateWindow() {
+        guard let window = currentWindow ?? NoteWindowTracker.shared.window(for: viewModel.note.id) else {
+            return
+        }
+        // 临时提升窗口层级以便激活
+        window.level = .normal
+        window.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+
+        // 如果是 pin 状态，延迟恢复桌面层级
+        if viewModel.note.isPinned {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                window.level = .init(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
+            }
+        }
+    }
 }
 
 // MARK: - 顶部标题栏
@@ -168,6 +188,7 @@ struct HeaderView: View {
     let onClose: () -> Void
     let onSpaceNameChange: (String) -> Void
     let onTogglePin: () -> Void
+    let onActivate: () -> Void
 
     @State private var isEditingName = false
     @State private var editedName: String = ""
@@ -248,6 +269,10 @@ struct HeaderView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(Color.white)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onActivate()
+        }
     }
 }
 
