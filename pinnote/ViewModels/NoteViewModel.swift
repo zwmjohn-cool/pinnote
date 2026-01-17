@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 /// 便利贴视图模型
 class NoteViewModel: ObservableObject {
@@ -8,6 +9,7 @@ class NoteViewModel: ObservableObject {
 
     private var saveTimer: Timer?
     private let noteStore: NoteStore
+    private var cancellables = Set<AnyCancellable>()
 
     init(note: Note, store: NoteStore = .shared) {
         self.note = note
@@ -26,6 +28,24 @@ class NoteViewModel: ObservableObject {
 
         // 监听内容变化，延迟保存
         setupAutoSave()
+
+        // 监听 pin 状态变化通知
+        setupPinObserver()
+    }
+
+    private func setupPinObserver() {
+        NotificationCenter.default.publisher(for: .updateWindowLevel)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let noteID = notification.object as? UUID,
+                      noteID == self.note.id,
+                      let isPinned = notification.userInfo?["isPinned"] as? Bool else {
+                    return
+                }
+                self.note.isPinned = isPinned
+            }
+            .store(in: &cancellables)
     }
 
     private func setupAutoSave() {
