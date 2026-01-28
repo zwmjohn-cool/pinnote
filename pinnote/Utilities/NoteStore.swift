@@ -7,6 +7,9 @@ class NoteStore: ObservableObject {
 
     @Published var notes: [Note] = []
 
+    /// 已删除的便利贴 ID 集合，防止被重新保存
+    private var deletedNoteIDs: Set<UUID> = []
+
     private let saveKey = "pinnote_notes"
     private let fileManager = FileManager.default
 
@@ -44,6 +47,11 @@ class NoteStore: ObservableObject {
 
     // MARK: - 保存
     func save(_ note: Note) {
+        // 如果便利贴已被删除，忽略保存请求
+        if deletedNoteIDs.contains(note.id) {
+            return
+        }
+
         if let index = notes.firstIndex(where: { $0.id == note.id }) {
             notes[index] = note
         } else {
@@ -53,11 +61,21 @@ class NoteStore: ObservableObject {
     }
 
     func delete(_ note: Note) {
+        print("[NoteStore] 删除便利贴: \(note.id), 当前数量: \(notes.count)")
+        deletedNoteIDs.insert(note.id)
         notes.removeAll { $0.id == note.id }
+        print("[NoteStore] 删除后数量: \(notes.count)")
         persistNotes()
+
+        // 关闭对应的窗口
+        NotificationCenter.default.post(
+            name: .closeNoteWindow,
+            object: note.id
+        )
     }
 
     func delete(id: UUID) {
+        deletedNoteIDs.insert(id)
         notes.removeAll { $0.id == id }
         persistNotes()
     }

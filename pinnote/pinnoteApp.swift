@@ -29,7 +29,7 @@ struct pinnoteApp: App {
 
     var body: some Scene {
         // 菜单栏
-        MenuBarExtra("PinNote", systemImage: "note.text") {
+        MenuBarExtra("PinNote", image: "MenuBarIcon") {
             MenuBarView(noteStore: noteStore)
         }
         .menuBarExtraStyle(.window)
@@ -185,23 +185,33 @@ struct NoteListItem: View {
 
             // 操作按钮
             if isHovering {
-                // Pin/Unpin 按钮
-                Button(action: onTogglePin) {
-                    Image(systemName: note.isPinned ? "pin.slash.fill" : "pin.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(note.isPinned ? .orange : .gray)
-                }
-                .buttonStyle(.plain)
-                .help(note.isPinned ? "取消置后" : "置于最后")
+                HStack(spacing: 4) {
+                    // Pin/Unpin 按钮
+                    Button {
+                        onTogglePin()
+                    } label: {
+                        Image(systemName: note.isPinned ? "pin.slash.fill" : "pin.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(note.isPinned ? .orange : .gray)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(note.isPinned ? "取消置后" : "置于最后")
 
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.red)
+                    Button {
+                        onDelete()
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.red)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("删除")
                 }
-                .buttonStyle(.plain)
-                .help("删除")
-                .padding(.trailing, 8)
+                .padding(.trailing, 4)
             }
         }
         .padding(.horizontal, 12)
@@ -296,8 +306,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func handleCloseNote(_ notification: Notification) {
-        // 关闭当前 key window
-        if let keyWindow = NSApplication.shared.keyWindow {
+        // 根据 noteID 找到对应窗口并关闭
+        if let noteID = notification.object as? UUID,
+           let window = NoteWindowTracker.shared.window(for: noteID) {
+            window.close()
+        } else if let keyWindow = NSApplication.shared.keyWindow {
+            // 兜底：关闭当前 key window
             keyWindow.close()
         }
     }
