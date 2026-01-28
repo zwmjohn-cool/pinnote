@@ -285,11 +285,12 @@ struct HeaderView: View {
                         .font(.system(size: 10))
                     Text(spaceName)
                         .font(.system(size: 12, weight: .medium))
-                    if isPinned {
-                        Image(systemName: "pin.fill")
-                            .font(.system(size: 8))
-                            .foregroundStyle(.orange)
-                    }
+                    // Pin 状态图标（已隐藏）
+//                    if isPinned {
+//                        Image(systemName: "pin.fill")
+//                            .font(.system(size: 8))
+//                            .foregroundStyle(.orange)
+//                    }
                 }
                 .foregroundStyle(.black)
                 .onTapGesture(count: 2) {
@@ -300,17 +301,17 @@ struct HeaderView: View {
 
             Spacer()
 
-            // Pin 按钮 - 置顶/置底切换
-            if isHovering {
-                Button(action: onTogglePin) {
-                    Image(systemName: isPinned ? "pin.slash.fill" : "pin.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(isPinned ? .orange : .black)
-                }
-                .buttonStyle(.plain)
-                .help(isPinned ? "取消置后" : "置于最后")
-                .transition(.opacity)
-            }
+            // Pin 按钮 - 置顶/置底切换（已隐藏）
+//            if isHovering {
+//                Button(action: onTogglePin) {
+//                    Image(systemName: isPinned ? "pin.slash.fill" : "pin.fill")
+//                        .font(.system(size: 12))
+//                        .foregroundStyle(isPinned ? .orange : .black)
+//                }
+//                .buttonStyle(.plain)
+//                .help(isPinned ? "取消置后" : "置于最后")
+//                .transition(.opacity)
+//            }
 
             // 新建便利贴按钮
             if isHovering {

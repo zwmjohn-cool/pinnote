@@ -168,11 +168,12 @@ struct NoteListItem: View {
                     Text(note.spaceName)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.primary)
-                    if note.isPinned {
-                        Image(systemName: "pin.fill")
-                            .font(.system(size: 8))
-                            .foregroundStyle(.orange)
-                    }
+                    // Pin 状态图标（已隐藏）
+//                    if note.isPinned {
+//                        Image(systemName: "pin.fill")
+//                            .font(.system(size: 8))
+//                            .foregroundStyle(.orange)
+//                    }
                 }
 
                 Text(notePreview)
@@ -186,18 +187,18 @@ struct NoteListItem: View {
             // 操作按钮
             if isHovering {
                 HStack(spacing: 4) {
-                    // Pin/Unpin 按钮
-                    Button {
-                        onTogglePin()
-                    } label: {
-                        Image(systemName: note.isPinned ? "pin.slash.fill" : "pin.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(note.isPinned ? .orange : .gray)
-                            .frame(width: 24, height: 24)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help(note.isPinned ? "取消置后" : "置于最后")
+                    // Pin/Unpin 按钮（已隐藏）
+//                    Button {
+//                        onTogglePin()
+//                    } label: {
+//                        Image(systemName: note.isPinned ? "pin.slash.fill" : "pin.fill")
+//                            .font(.system(size: 12))
+//                            .foregroundStyle(note.isPinned ? .orange : .gray)
+//                            .frame(width: 24, height: 24)
+//                            .contentShape(Rectangle())
+//                    }
+//                    .buttonStyle(.plain)
+//                    .help(note.isPinned ? "取消置后" : "置于最后")
 
                     Button {
                         onDelete()
