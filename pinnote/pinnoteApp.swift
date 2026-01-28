@@ -101,7 +101,7 @@ struct MenuBarView: View {
                     LazyVStack(spacing: 2) {
                         ForEach(noteStore.notes) { note in
                             NoteListItem(note: note) {
-                                openWindow(id: "note", value: note.id)
+                                openNoteAndSwitchToSpace(note)
                             } onDelete: {
                                 noteStore.delete(note)
                             } onTogglePin: {
@@ -142,6 +142,23 @@ struct MenuBarView: View {
         // 延迟激活窗口，确保窗口已创建
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             NSApplication.shared.activate(ignoringOtherApps: true)
+        }
+    }
+
+    private func openNoteAndSwitchToSpace(_ note: Note) {
+        // 打开窗口（如果窗口已存在则无操作）
+        openWindow(id: "note", value: note.id)
+
+        // 延迟激活窗口，确保窗口已创建并注册到 NoteWindowTracker
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            if let window = NoteWindowTracker.shared.window(for: note.id) {
+                // 激活窗口会自动切换到该窗口所在的桌面
+                window.makeKeyAndOrderFront(nil)
+                NSApplication.shared.activate(ignoringOtherApps: true)
+                print("[MenuBarView] 激活便利贴窗口: \(note.spaceName) (ID: \(note.spaceID))")
+            } else {
+                print("[MenuBarView] 警告: 无法找到便利贴窗口: \(note.id)")
+            }
         }
     }
 }
