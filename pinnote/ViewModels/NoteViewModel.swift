@@ -49,7 +49,13 @@ class NoteViewModel: ObservableObject {
     }
 
     private func setupAutoSave() {
-        // 内容变化时自动保存（防抖 1 秒）
+        // 监听 attributedText 变化，延迟保存（防抖 1 秒）
+        $attributedText
+            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.saveContent()
+            }
+            .store(in: &cancellables)
     }
 
     func saveContent() {

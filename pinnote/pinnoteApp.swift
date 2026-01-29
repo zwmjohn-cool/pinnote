@@ -248,10 +248,15 @@ struct NoteListItem: View {
         if note.content.isEmpty {
             return "空白便利贴"
         }
+
+        // 解析 RTF 数据获取纯文本
         if let attrString = NSAttributedString(rtf: note.content, documentAttributes: nil) {
             let text = attrString.string.trimmingCharacters(in: .whitespacesAndNewlines)
-            return text.isEmpty ? "空白便利贴" : text
+            if !text.isEmpty {
+                return text
+            }
         }
+
         return "空白便利贴"
     }
 }
