@@ -24,17 +24,44 @@ private struct WindowTitleAccessoryView: View {
 class NoteWindowTracker: ObservableObject {
     static let shared = NoteWindowTracker()
     private var windowMap: [UUID: NSWindow] = [:]
+    private var windowButtonHandlerMap: [UUID: NoteWindowButtonHandler] = [:]
 
     func register(noteID: UUID, window: NSWindow) {
         windowMap[noteID] = window
     }
 
+    func registerButtonHandler(noteID: UUID, handler: NoteWindowButtonHandler) {
+        windowButtonHandlerMap[noteID] = handler
+    }
+
     func unregister(noteID: UUID) {
         windowMap.removeValue(forKey: noteID)
+        windowButtonHandlerMap.removeValue(forKey: noteID)
     }
 
     func window(for noteID: UUID) -> NSWindow? {
         return windowMap[noteID]
+    }
+}
+
+final class NoteWindowButtonHandler: NSObject {
+    private weak var viewModel: NoteViewModel?
+    private weak var window: NSWindow?
+
+    init(viewModel: NoteViewModel, window: NSWindow) {
+        self.viewModel = viewModel
+        self.window = window
+    }
+
+    @objc func deleteNote(_ sender: Any?) {
+        guard let viewModel else { return }
+        viewModel.saveContent()
+        NoteStore.shared.delete(viewModel.note)
+    }
+
+    @objc func hideWindow(_ sender: Any?) {
+        guard let window else { return }
+        window.orderOut(sender)
     }
 }
 
@@ -276,7 +303,23 @@ struct NoteWindow: View {
             configuredWindowNumber = window.windowNumber
         }
 
+        configureWindowButtons(window)
         updateWindowTitle(viewModel.note.spaceName)
+    }
+
+    private func configureWindowButtons(_ window: NSWindow) {
+        let buttonHandler = NoteWindowButtonHandler(viewModel: viewModel, window: window)
+        NoteWindowTracker.shared.registerButtonHandler(noteID: viewModel.note.id, handler: buttonHandler)
+
+        if let closeButton = window.standardWindowButton(.closeButton) {
+            closeButton.target = buttonHandler
+            closeButton.action = #selector(NoteWindowButtonHandler.deleteNote(_:))
+        }
+
+        if let miniaturizeButton = window.standardWindowButton(.miniaturizeButton) {
+            miniaturizeButton.target = buttonHandler
+            miniaturizeButton.action = #selector(NoteWindowButtonHandler.hideWindow(_:))
+        }
     }
 
     private func applySavedWindowSize(to window: NSWindow) {
