@@ -13,6 +13,7 @@ extension Notification.Name {
     static let closeNoteWindow = Notification.Name("closeNoteWindow")
     static let openNoteWindow = Notification.Name("openNoteWindow")
     static let updateWindowLevel = Notification.Name("updateWindowLevel")
+    static let spacesConfigurationDidChange = Notification.Name("spacesConfigurationDidChange")
 }
 
 // MARK: - 全局窗口管理器

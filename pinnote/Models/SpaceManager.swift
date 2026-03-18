@@ -34,6 +34,9 @@ class SpaceManager: ObservableObject {
     @Published var currentSpaceID: Int = 0
     @Published var currentSpaceIndex: Int = 1
 
+    private var lastManagedSpacesSignature = ""
+    private var managedSpacesPollingTimer: Timer?
+
     // MARK: - 私有 API 声明
     @_silgen_name("CGSDefaultConnectionForThread")
     private static func CGSDefaultConnectionForThread() -> Int32
@@ -49,7 +52,9 @@ class SpaceManager: ObservableObject {
 
     private init() {
         updateCurrentSpace()
+        lastManagedSpacesSignature = getManagedSpacesSignature() ?? ""
         setupNotifications()
+        startManagedSpacesPolling()
         // 打印调试信息
         debugPrintSpaces()
     }
@@ -66,12 +71,43 @@ class SpaceManager: ObservableObject {
     @objc private func spaceDidChange(_ notification: Notification) {
         DispatchQueue.main.async {
             self.updateCurrentSpace()
+            self.refreshManagedSpacesSignature()
             if let info = self.getSpaceInfo(for: self.currentSpaceID) {
                 print("[SpaceManager] 桌面切换 -> \(info.fullName) (ID: \(self.currentSpaceID))")
             } else {
                 print("[SpaceManager] 桌面切换 -> Space ID: \(self.currentSpaceID)")
             }
         }
+    }
+
+    private func startManagedSpacesPolling() {
+        managedSpacesPollingTimer = Timer.scheduledTimer(
+            withTimeInterval: 1.0,
+            repeats: true
+        ) { [weak self] _ in
+            self?.refreshManagedSpacesSignature()
+        }
+    }
+
+    private func refreshManagedSpacesSignature() {
+        guard let currentSignature = getManagedSpacesSignature() else {
+            return
+        }
+
+        guard !lastManagedSpacesSignature.isEmpty else {
+            lastManagedSpacesSignature = currentSignature
+            return
+        }
+
+        guard currentSignature != lastManagedSpacesSignature else {
+            return
+        }
+
+        lastManagedSpacesSignature = currentSignature
+        updateCurrentSpace()
+
+        print("[SpaceManager] 检测到桌面布局变化，刷新便利贴桌面名称")
+        NotificationCenter.default.post(name: .spacesConfigurationDidChange, object: nil)
     }
 
     func updateCurrentSpace() {
@@ -123,6 +159,21 @@ class SpaceManager: ObservableObject {
         }
 
         return result
+    }
+
+    private func getManagedSpacesSignature() -> String? {
+        guard let displaysAndSpaces = parseDisplaysAndSpaces() else {
+            return nil
+        }
+
+        return displaysAndSpaces
+            .map { displayInfo, spaces in
+                let orderedSpaceIDs = spaces.map { space in
+                    String(space["id64"] as? Int ?? space["ManagedSpaceID"] as? Int ?? 0)
+                }.joined(separator: ",")
+                return "\(displayInfo.identifier):[\(orderedSpaceIDs)]"
+            }
+            .joined(separator: "|")
     }
 
     /// 获取指定 spaceID 的详细信息
@@ -255,6 +306,7 @@ class SpaceManager: ObservableObject {
     }
 
     deinit {
+        managedSpacesPollingTimer?.invalidate()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 }

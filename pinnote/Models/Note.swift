@@ -84,6 +84,14 @@ extension Note {
         ("橙色", "#FFDAB9"),
         ("白色", "#FFFFFF")
     ]
+
+    static func isDefaultSpaceName(_ name: String) -> Bool {
+        name == "桌面" ||
+        name == "全屏应用" ||
+        name.hasPrefix("桌面 ") ||
+        name.hasPrefix("主屏 桌面") ||
+        name.hasPrefix("副屏")
+    }
 }
 
 // MARK: - Color Hex 扩展

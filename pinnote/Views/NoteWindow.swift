@@ -125,6 +125,7 @@ struct NoteWindow: View {
                 let currentSpaceID = spaceManager.getCurrentSpaceID()
                 viewModel.updateSpaceID(currentSpaceID)
             }
+            viewModel.refreshSpaceNameFromCurrentSpaceID()
             // 延迟应用已保存的 pin 状态，确保窗口已经被追踪
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 applyWindowLevel(isPinned: viewModel.note.isPinned)
@@ -143,10 +144,18 @@ struct NoteWindow: View {
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.activeSpaceDidChangeNotification)) { _ in
             // 桌面切换时检查窗口是否在新桌面上，延迟等待系统更新
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                viewModel.refreshSpaceNameFromCurrentSpaceID()
                 checkAndUpdateWindowSpace()
             }
             // 再次延迟检查，确保捕获到变化
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                viewModel.refreshSpaceNameFromCurrentSpaceID()
+                checkAndUpdateWindowSpace()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .spacesConfigurationDidChange)) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                viewModel.refreshSpaceNameFromCurrentSpaceID()
                 checkAndUpdateWindowSpace()
             }
         }

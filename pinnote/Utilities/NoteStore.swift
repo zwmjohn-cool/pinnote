@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 /// 便利贴数据存储管理
 class NoteStore: ObservableObject {
@@ -12,6 +13,7 @@ class NoteStore: ObservableObject {
 
     private let saveKey = "pinnote_notes"
     private let fileManager = FileManager.default
+    private var cancellables = Set<AnyCancellable>()
 
     private var saveURL: URL {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -27,6 +29,16 @@ class NoteStore: ObservableObject {
 
     private init() {
         loadNotes()
+        setupObservers()
+    }
+
+    private func setupObservers() {
+        NotificationCenter.default.publisher(for: .spacesConfigurationDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshDefaultSpaceNames()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - 加载
@@ -109,6 +121,29 @@ class NoteStore: ObservableObject {
 
     func notes(for spaceID: Int) -> [Note] {
         notes.filter { $0.spaceID == spaceID }
+    }
+
+    func refreshDefaultSpaceNames() {
+        var didChange = false
+
+        for index in notes.indices {
+            guard Note.isDefaultSpaceName(notes[index].spaceName) else {
+                continue
+            }
+
+            let updatedName = SpaceManager.shared.getDefaultSpaceName(for: notes[index].spaceID)
+            guard notes[index].spaceName != updatedName else {
+                continue
+            }
+
+            notes[index].spaceName = updatedName
+            notes[index].updatedAt = Date()
+            didChange = true
+        }
+
+        if didChange {
+            persistNotes()
+        }
     }
 
     // MARK: - 创建新便利贴
