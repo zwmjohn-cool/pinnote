@@ -75,32 +75,35 @@ struct NoteWindow: View {
         NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.normalWindow)) - 1)
     }
 
-    var body: some View {
-        VStack(spacing: 0) {
-            // 工具栏
-            if isHovering || isEditing {
-                ToolbarView(
-                    onFormat: { command in
-                        if let textView = NSApplication.shared.currentTextView {
-                            command.apply(to: textView)
-                        }
-                    },
-                    onColorChange: { hex in
-                        viewModel.updateBackgroundColor(hex)
-                    },
-                    currentColor: viewModel.note.backgroundColor
-                )
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
+    private var showsToolbar: Bool {
+        isHovering || isEditing
+    }
 
-            // 富文本编辑器
+    var body: some View {
+        ZStack(alignment: .top) {
             RichTextEditor(
                 attributedText: $viewModel.attributedText,
+                isEditing: $isEditing,
                 backgroundColor: viewModel.note.color,
-                textColor: viewModel.note.nsTextColor
+                textColor: viewModel.note.nsTextColor,
+                topInset: showsToolbar ? 40 : 8
             )
             .frame(minWidth: 200, minHeight: 150)
             .allowsHitTesting(!viewModel.note.isPinned)
+
+            ToolbarView(
+                onFormat: { command in
+                    if let textView = NSApplication.shared.currentTextView {
+                        command.apply(to: textView)
+                    }
+                },
+                onColorChange: { hex in
+                    viewModel.updateBackgroundColor(hex)
+                },
+                currentColor: viewModel.note.backgroundColor
+            )
+            .opacity(showsToolbar ? 1 : 0)
+            .allowsHitTesting(showsToolbar)
         }
         .background(viewModel.note.color)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -122,6 +125,7 @@ struct NoteWindow: View {
                 isHovering = hovering
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: showsToolbar)
         .onAppear {
             // 只在首次创建时设置桌面空间（spaceID == 0 表示新建的便利贴）
             if viewModel.note.spaceID == 0 {

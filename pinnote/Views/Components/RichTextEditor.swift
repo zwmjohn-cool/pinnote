@@ -4,14 +4,39 @@ import AppKit
 /// 富文本编辑器 - 封装 NSTextView
 struct RichTextEditor: NSViewRepresentable {
     @Binding var attributedText: NSAttributedString
+    @Binding var isEditing: Bool
     var backgroundColor: Color
     var textColor: NSColor
+    var topInset: CGFloat = 8
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSTextView.scrollableTextView()
-        guard let textView = scrollView.documentView as? NSTextView else {
-            return scrollView
+        let scrollView = NSScrollView()
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
+        scrollView.backgroundColor = .clear
+
+        let textStorage = NSTextStorage()
+        let layoutManager = NSLayoutManager()
+        let textContainer = NSTextContainer(
+            size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+        )
+
+        textContainer.widthTracksTextView = true
+        textStorage.addLayoutManager(layoutManager)
+        layoutManager.addTextContainer(textContainer)
+
+        let textView = PinNoteTextView(frame: .zero, textContainer: textContainer)
+        textView.onFocusChange = { isFocused in
+            context.coordinator.updateEditingState(isFocused)
         }
+        textView.requestInitialFocus = { [weak textView] in
+            guard let textView else { return }
+            context.coordinator.requestInitialFocus(for: textView)
+        }
+        scrollView.documentView = textView
 
         // 配置文本视图
         textView.delegate = context.coordinator
@@ -23,6 +48,20 @@ struct RichTextEditor: NSViewRepresentable {
         textView.usesRuler = false
         textView.importsGraphics = false
         textView.allowsImageEditing = false
+        textView.focusRingType = NSFocusRingType.none
+        textView.minSize = NSSize.zero
+        textView.maxSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = NSView.AutoresizingMask.width
+        textView.textContainer?.containerSize = NSSize(
+            width: 0,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        textView.textContainer?.widthTracksTextView = true
 
         // 设置默认字体和颜色
         textView.font = NSFont.systemFont(ofSize: 14)
@@ -30,11 +69,9 @@ struct RichTextEditor: NSViewRepresentable {
 
         // 透明背景
         textView.drawsBackground = false
-        scrollView.drawsBackground = false
-        scrollView.backgroundColor = .clear
 
         // 边距
-        textView.textContainerInset = NSSize(width: 8, height: 8)
+        textView.textContainerInset = NSSize(width: 8, height: topInset)
 
         // 设置插入点（光标）颜色
         textView.insertionPointColor = textColor
@@ -53,6 +90,7 @@ struct RichTextEditor: NSViewRepresentable {
         // 更新文字颜色
         textView.textColor = textColor
         textView.insertionPointColor = textColor
+        textView.textContainerInset = NSSize(width: 8, height: topInset)
 
         // 只在内容实际变化时更新，避免光标跳动
         if !context.coordinator.isEditing {
@@ -63,6 +101,8 @@ struct RichTextEditor: NSViewRepresentable {
                 textView.selectedRanges = selectedRanges
             }
         }
+
+        context.coordinator.requestInitialFocus(for: textView)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -72,17 +112,40 @@ struct RichTextEditor: NSViewRepresentable {
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: RichTextEditor
         var isEditing = false
+        private var didRequestInitialFocus = false
 
         init(_ parent: RichTextEditor) {
             self.parent = parent
         }
 
+        func updateEditingState(_ isEditing: Bool) {
+            guard self.isEditing != isEditing else { return }
+            self.isEditing = isEditing
+            DispatchQueue.main.async {
+                self.parent.isEditing = isEditing
+            }
+        }
+
+        func requestInitialFocus(for textView: NSTextView) {
+            guard !didRequestInitialFocus,
+                  let window = textView.window else {
+                return
+            }
+
+            didRequestInitialFocus = true
+            DispatchQueue.main.async {
+                NSApplication.shared.activate(ignoringOtherApps: true)
+                window.makeKeyAndOrderFront(nil)
+                window.makeFirstResponder(textView)
+            }
+        }
+
         func textDidBeginEditing(_ notification: Notification) {
-            isEditing = true
+            updateEditingState(true)
         }
 
         func textDidEndEditing(_ notification: Notification) {
-            isEditing = false
+            updateEditingState(false)
             guard let textView = notification.object as? NSTextView else { return }
             parent.attributedText = textView.attributedString()
         }
@@ -91,6 +154,49 @@ struct RichTextEditor: NSViewRepresentable {
             guard let textView = notification.object as? NSTextView else { return }
             parent.attributedText = textView.attributedString()
         }
+    }
+}
+
+private final class PinNoteTextView: NSTextView {
+    var onFocusChange: ((Bool) -> Void)?
+    var requestInitialFocus: (() -> Void)?
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        requestInitialFocus?()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if let window {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        }
+
+        super.mouseDown(with: event)
+
+        if window?.firstResponder !== self {
+            window?.makeFirstResponder(self)
+        }
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let didBecomeFirstResponder = super.becomeFirstResponder()
+        if didBecomeFirstResponder {
+            onFocusChange?(true)
+        }
+        return didBecomeFirstResponder
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let didResignFirstResponder = super.resignFirstResponder()
+        if didResignFirstResponder {
+            onFocusChange?(false)
+        }
+        return didResignFirstResponder
     }
 }
 
