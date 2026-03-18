@@ -75,9 +75,7 @@ jobs:
             2. 双击打开 DMG 文件
             3. 将 `pinnote.app` 拖到 `Applications` 文件夹
             4. 首次打开可能需要在系统设置中允许运行（右键点击应用选择"打开"）
-
-            ### What's Changed
-            查看提交记录了解详细更新内容
+          generate_release_notes: true
           files: pinnote-macos.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
