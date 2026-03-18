@@ -47,7 +47,7 @@ struct pinnoteApp: App {
         }
         .windowStyle(.titleBar)
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 300, height: 300)
+        .defaultSize(width: AppSettings.defaultNoteWidth, height: AppSettings.defaultNoteHeight)
         .defaultPosition(.center)
 
         // 设置窗口
@@ -69,6 +69,13 @@ struct MenuBarView: View {
                 Text("便利贴")
                     .font(.headline)
                 Spacer()
+                SettingsLink {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 16))
+                }
+                .buttonStyle(.plain)
+                .help("设置")
+
                 Button(action: createNewNote) {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 18))
@@ -299,21 +306,92 @@ struct NoteWindowContainer: View {
 
 // MARK: - 设置视图
 struct SettingsView: View {
+    @AppStorage(AppSettings.defaultNoteWidthKey) private var defaultNoteWidth = AppSettings.fallbackNoteWidth
+    @AppStorage(AppSettings.defaultNoteHeightKey) private var defaultNoteHeight = AppSettings.fallbackNoteHeight
+
     var body: some View {
-        Form {
-            Text("PinNote 设置")
-                .font(.headline)
-            Text("便利贴应用 - 帮助你标记每个桌面的用途")
-                .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("PinNote 设置")
+                        .font(.title2.weight(.semibold))
+                    Text("配置新便利贴的默认尺寸。这里的设置只影响之后新建的便利贴。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
-            Divider()
+                Divider()
 
-            Text("提示：双击便利贴顶部的桌面名称可以自定义名称")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("新便利贴默认尺寸")
+                        .font(.headline)
+
+                    settingRow(title: "默认宽度", value: defaultNoteWidth, binding: widthBinding)
+                    settingRow(title: "默认高度", value: defaultNoteHeight, binding: heightBinding)
+
+                    HStack {
+                        Button("恢复默认 300 x 300") {
+                            defaultNoteWidth = AppSettings.fallbackNoteWidth
+                            defaultNoteHeight = AppSettings.fallbackNoteHeight
+                        }
+                        .buttonStyle(.link)
+
+                        Spacer()
+
+                        Text("当前默认：\(Int(defaultNoteWidth)) x \(Int(defaultNoteHeight))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                )
+
+                Text("提示：双击便利贴顶部的桌面名称可以自定义名称。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
         }
-        .padding()
-        .frame(width: 350, height: 200)
+        .frame(width: 480, height: 280)
+    }
+
+    private var widthBinding: Binding<Double> {
+        Binding(
+            get: { defaultNoteWidth },
+            set: { defaultNoteWidth = AppSettings.clampedWidth($0) }
+        )
+    }
+
+    private var heightBinding: Binding<Double> {
+        Binding(
+            get: { defaultNoteHeight },
+            set: { defaultNoteHeight = AppSettings.clampedHeight($0) }
+        )
+    }
+
+    @ViewBuilder
+    private func settingRow(title: String, value: Double, binding: Binding<Double>) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .frame(width: 72, alignment: .leading)
+
+            Spacer()
+
+            Text("\(Int(value)) px")
+                .font(.body.weight(.medium))
+                .monospacedDigit()
+                .frame(width: 80, alignment: .trailing)
+
+            Stepper("", value: binding, in: 200...1200, step: 20)
+                .labelsHidden()
+        }
     }
 }
 

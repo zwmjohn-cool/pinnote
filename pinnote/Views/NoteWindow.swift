@@ -69,6 +69,7 @@ struct NoteWindow: View {
     @State private var isEditing = false
     @State private var isHovering = false
     @State private var currentWindow: NSWindow?
+    @State private var configuredWindowNumber: Int?
 
     private var pinnedWindowLevel: NSWindow.Level {
         NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.normalWindow)) - 1)
@@ -174,10 +175,17 @@ struct NoteWindow: View {
                 checkAndUpdateWindowSpace()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { notification in
+            if let window = notification.object as? NSWindow,
+               window == currentWindow {
+                persistWindowFrame(window)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didMoveNotification)) { notification in
             // 窗口拖动结束时检查是否移动到其他桌面
             if let window = notification.object as? NSWindow,
                window == currentWindow {
+                persistWindowFrame(window)
                 // 延迟检查，等待系统更新窗口所在空间
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     checkAndUpdateWindowSpace()
@@ -258,7 +266,31 @@ struct NoteWindow: View {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = false
         window.isMovableByWindowBackground = true
+
+        if configuredWindowNumber != window.windowNumber {
+            applySavedWindowSize(to: window)
+            configuredWindowNumber = window.windowNumber
+        }
+
         updateWindowTitle(viewModel.note.spaceName)
+    }
+
+    private func applySavedWindowSize(to window: NSWindow) {
+        let width = max(viewModel.note.windowWidth, AppSettings.minNoteWidth)
+        let height = max(viewModel.note.windowHeight, AppSettings.minNoteHeight)
+        let targetSize = CGSize(width: width, height: height)
+
+        guard window.frame.size != targetSize else {
+            return
+        }
+
+        var frame = window.frame
+        frame.size = targetSize
+        window.setFrame(frame, display: true)
+    }
+
+    private func persistWindowFrame(_ window: NSWindow) {
+        viewModel.updateWindowFrame(window.frame)
     }
 
     private func updateWindowTitle(_ title: String) {

@@ -150,10 +150,13 @@ class NoteStore: ObservableObject {
     func createNote(spaceID: Int? = nil) -> Note {
         let currentSpaceID = spaceID ?? SpaceManager.shared.getCurrentSpaceID()
         let spaceName = SpaceManager.shared.getDefaultSpaceName(for: currentSpaceID)
+        let defaultSize = AppSettings.defaultNoteSize
 
         var note = Note(
             spaceID: currentSpaceID,
-            spaceName: spaceName
+            spaceName: spaceName,
+            windowWidth: defaultSize.width,
+            windowHeight: defaultSize.height
         )
 
         // 随机选择一个颜色

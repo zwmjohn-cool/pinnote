@@ -103,6 +103,16 @@ class NoteViewModel: ObservableObject {
         noteStore.save(note)
     }
 
+    func updateWindowFrame(_ frame: CGRect) {
+        guard note.windowFrame != frame else {
+            return
+        }
+
+        note.windowFrame = frame
+        note.updatedAt = Date()
+        noteStore.save(note)
+    }
+
     func togglePinned() {
         note.isPinned.toggle()
         note.updatedAt = Date()
