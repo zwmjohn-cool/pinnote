@@ -45,7 +45,7 @@ struct pinnoteApp: App {
                     }
                 }
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowStyle(.titleBar)
         .windowResizability(.contentMinSize)
         .defaultSize(width: 300, height: 300)
         .defaultPosition(.center)

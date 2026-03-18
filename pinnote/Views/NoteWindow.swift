@@ -1,6 +1,25 @@
 import SwiftUI
 import AppKit
 
+private let noteTitleHostIdentifier = NSUserInterfaceItemIdentifier("PinNoteTitleHost")
+
+private struct WindowTitleAccessoryView: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "desktopcomputer")
+                .font(.system(size: 11, weight: .semibold))
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+    }
+}
+
 // MARK: - 窗口管理器（用于追踪每个便利贴的窗口）
 class NoteWindowTracker: ObservableObject {
     static let shared = NoteWindowTracker()
@@ -57,24 +76,6 @@ struct NoteWindow: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 顶部标题栏 - 显示桌面空间信息
-            HeaderView(
-                spaceName: viewModel.note.spaceName,
-                spaceID: viewModel.note.spaceID,
-                isPinned: viewModel.note.isPinned,
-                isHovering: isHovering,
-                onClose: { viewModel.closeWindow() },
-                onSpaceNameChange: { newName in
-                    viewModel.updateSpaceName(newName)
-                },
-                onTogglePin: {
-                    viewModel.togglePinned()
-                },
-                onActivate: {
-                    activateWindow()
-                }
-            )
-
             // 工具栏
             if isHovering || isEditing {
                 ToolbarView(
@@ -112,6 +113,7 @@ struct NoteWindow: View {
             WindowAccessor(noteID: viewModel.note.id) { window in
                 currentWindow = window
                 NoteWindowTracker.shared.register(noteID: viewModel.note.id, window: window)
+                configureWindow(window)
             }
         )
         .onHover { hovering in
@@ -126,10 +128,16 @@ struct NoteWindow: View {
                 viewModel.updateSpaceID(currentSpaceID)
             }
             viewModel.refreshSpaceNameFromCurrentSpaceID()
+            if let window = currentWindow ?? NoteWindowTracker.shared.window(for: viewModel.note.id) {
+                configureWindow(window)
+            }
             // 延迟应用已保存的 pin 状态，确保窗口已经被追踪
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 applyWindowLevel(isPinned: viewModel.note.isPinned)
             }
+        }
+        .onChange(of: viewModel.note.spaceName) { _, newName in
+            updateWindowTitle(newName)
         }
         .onDisappear {
             NoteWindowTracker.shared.unregister(noteID: viewModel.note.id)
@@ -245,102 +253,40 @@ struct NoteWindow: View {
             }
         }
     }
-}
 
-// MARK: - 顶部标题栏
-struct HeaderView: View {
-    let spaceName: String
-    let spaceID: Int
-    let isPinned: Bool
-    let isHovering: Bool
-    let onClose: () -> Void
-    let onSpaceNameChange: (String) -> Void
-    let onTogglePin: () -> Void
-    let onActivate: () -> Void
+    private func configureWindow(_ window: NSWindow) {
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = false
+        window.isMovableByWindowBackground = true
+        updateWindowTitle(viewModel.note.spaceName)
+    }
 
-    @State private var isEditingName = false
-    @State private var editedName: String = ""
-
-    var body: some View {
-        HStack(spacing: 8) {
-            // 关闭按钮
-            if isHovering {
-                Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.black)
-                }
-                .buttonStyle(.plain)
-                .transition(.opacity)
-            }
-
-            // 桌面空间标识
-            if isEditingName {
-                TextField("空间名称", text: $editedName)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.black)
-                    .frame(maxWidth: 150)
-                    .onSubmit {
-                        onSpaceNameChange(editedName)
-                        isEditingName = false
-                    }
-                    .onExitCommand {
-                        isEditingName = false
-                    }
-            } else {
-                HStack(spacing: 4) {
-                    Image(systemName: "desktopcomputer")
-                        .font(.system(size: 10))
-                    Text(spaceName)
-                        .font(.system(size: 12, weight: .medium))
-                    // Pin 状态图标（已隐藏）
-//                    if isPinned {
-//                        Image(systemName: "pin.fill")
-//                            .font(.system(size: 8))
-//                            .foregroundStyle(.orange)
-//                    }
-                }
-                .foregroundStyle(.black)
-                .onTapGesture(count: 2) {
-                    editedName = spaceName
-                    isEditingName = true
-                }
-            }
-
-            Spacer()
-
-            // Pin 按钮 - 置顶/置底切换（已隐藏）
-//            if isHovering {
-//                Button(action: onTogglePin) {
-//                    Image(systemName: isPinned ? "pin.slash.fill" : "pin.fill")
-//                        .font(.system(size: 12))
-//                        .foregroundStyle(isPinned ? .orange : .black)
-//                }
-//                .buttonStyle(.plain)
-//                .help(isPinned ? "取消置后" : "置于最后")
-//                .transition(.opacity)
-//            }
-
-            // 新建便利贴按钮
-            if isHovering {
-                Button(action: {
-                    NotificationCenter.default.post(name: .createNewNote, object: nil)
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.black)
-                }
-                .buttonStyle(.plain)
-                .transition(.opacity)
-            }
+    private func updateWindowTitle(_ title: String) {
+        guard let window = currentWindow ?? NoteWindowTracker.shared.window(for: viewModel.note.id) else {
+            return
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color.white)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onActivate()
+
+        window.title = title
+        guard let titlebarView = window.standardWindowButton(.closeButton)?.superview,
+              let zoomButton = window.standardWindowButton(.zoomButton),
+              let closeButton = window.standardWindowButton(.closeButton) else {
+            return
+        }
+
+        if let titleHost = titlebarView.subviews
+            .first(where: { $0.identifier == noteTitleHostIdentifier }) as? NSHostingView<WindowTitleAccessoryView> {
+            titleHost.rootView = WindowTitleAccessoryView(title: title)
+            titleHost.invalidateIntrinsicContentSize()
+        } else {
+            let titleHost = NSHostingView(rootView: WindowTitleAccessoryView(title: title))
+            titleHost.identifier = noteTitleHostIdentifier
+            titleHost.translatesAutoresizingMaskIntoConstraints = false
+            titlebarView.addSubview(titleHost)
+
+            NSLayoutConstraint.activate([
+                titleHost.leadingAnchor.constraint(equalTo: zoomButton.trailingAnchor, constant: 14),
+                titleHost.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor)
+            ])
         }
     }
 }
